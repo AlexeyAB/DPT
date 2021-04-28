@@ -5,6 +5,7 @@ import glob
 import torch
 import cv2
 import argparse
+import time
 
 import util.io
 
@@ -115,6 +116,28 @@ def run(input_path, output_path, model_path, model_type="dpt_hybrid", optimize=T
         model = model.half()
 
     model.to(device)
+
+    print("Start benchmark...")
+    num_iterations = 100
+    sample = torch.rand(1, 3, net_h, net_w)
+    #model = torch.jit.trace(model.to('cpu').float(), sample).to(device)
+    if optimize == True and device == torch.device("cuda"):
+        model = model.half()
+        sample = sample.to(device).to(memory_format=torch.channels_last)
+        sample = sample.half()    
+
+    # Warming up
+    with torch.no_grad():
+        prediction = model(sample)
+
+    start = time.monotonic()   
+    for i in range(num_iterations):
+        with torch.no_grad():
+            prediction = model(sample)
+    
+    end = time.monotonic()
+
+    print(" Time per sample: ", 1000*(end - start) / (1 * num_iterations), " ms")
 
     # get input
     img_names = glob.glob(os.path.join(input_path, "*"))
